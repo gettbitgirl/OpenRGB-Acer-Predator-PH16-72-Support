@@ -8,6 +8,7 @@
 \*---------------------------------------------------------*/
 
 #include "RGBController_AcerPredatorLogo.h"
+#include <string>
 
 /**------------------------------------------------------------------*\
     @name Acer Predator Lid Logo
@@ -33,7 +34,7 @@ RGBController_AcerPredatorLogo::RGBController_AcerPredatorLogo(std::shared_ptr<A
 
     mode Direct;
     Direct.name         = "Direct";
-    Direct.value        = ACER_PREDATOR_LOGO_MODE_STATIC;
+    Direct.value        = ACER_PREDATOR_LOGO_MODE_DIRECT;
     Direct.flags        = MODE_FLAG_HAS_PER_LED_COLOR | MODE_FLAG_HAS_BRIGHTNESS;
     Direct.color_mode   = MODE_COLORS_PER_LED;
     Direct.brightness_min = 0;
@@ -95,16 +96,19 @@ void RGBController_AcerPredatorLogo::SetupZones()
 {
     zone logo_zone;
     logo_zone.name       = "Lid Logo";
-    logo_zone.type       = ZONE_TYPE_SINGLE;
-    logo_zone.leds_min   = 1;
-    logo_zone.leds_max   = 1;
-    logo_zone.leds_count = 1;
+    logo_zone.type       = ZONE_TYPE_LINEAR;
+    logo_zone.leds_min   = 3;
+    logo_zone.leds_max   = 3;
+    logo_zone.leds_count = 3;
     zones.push_back(logo_zone);
 
-    led logo_led;
-    logo_led.name        = "Logo";
-    logo_led.value       = 0;
-    leds.push_back(logo_led);
+    for(unsigned int i = 0; i < 3; i++)
+    {
+        led logo_led;
+        logo_led.name  = "Logo Zone " + std::to_string(i + 1);
+        logo_led.value = i;
+        leds.push_back(logo_led);
+    }
 
     SetupColors();
 }
@@ -112,6 +116,13 @@ void RGBController_AcerPredatorLogo::SetupZones()
 void RGBController_AcerPredatorLogo::DeviceUpdateLEDs()
 {
     mode& current_mode = modes[active_mode];
+
+    if(current_mode.value == ACER_PREDATOR_LOGO_MODE_DIRECT)
+    {
+        controller->SetDirect(colors.data(), colors.size(), (uint8_t)current_mode.brightness);
+        return;
+    }
+
     RGBColor color     = colors.size() > 0 ? colors[0] : 0;
 
     if(current_mode.color_mode == MODE_COLORS_MODE_SPECIFIC && current_mode.colors.size() > 0)

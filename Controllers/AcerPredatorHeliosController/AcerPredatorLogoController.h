@@ -18,6 +18,7 @@
 
 enum
 {
+    ACER_PREDATOR_LOGO_MODE_DIRECT    = 0xFF,
     /* The Darfon controller uses the same effect identifiers as the
        Sunrex controller.  These are the identifiers passed to the
        controller's four-report effect transaction, not USB commands. */
@@ -39,6 +40,7 @@ public:
 
     void SetLEDColor(RGBColor color, uint8_t brightness);
     void SetMode(uint8_t mode, uint8_t speed, uint8_t brightness, RGBColor color);
+    void SetDirect(const RGBColor* colors, size_t count, uint8_t brightness);
 
 private:
     hid_device* dev;
@@ -49,4 +51,5 @@ private:
 
     static uint8_t CalculateChecksum(const uint8_t* report, size_t len);
     void SendFeatureReport(const uint8_t* report);
+    void SendColourReport(uint8_t zone, RGBColor color);
 };

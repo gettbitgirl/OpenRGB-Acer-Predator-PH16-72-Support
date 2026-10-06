@@ -72,9 +72,56 @@ void AcerPredatorLogoController::SendFeatureReport(const uint8_t* report)
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
 }
 
+void AcerPredatorLogoController::SendColourReport(uint8_t zone, RGBColor color)
+{
+    uint8_t report[ACER_PREDATOR_LOGO_FEATURE_SIZE] =
+    {
+        0x00, 0x14, 0x00, zone,
+        RGBGetRValue(color), RGBGetGValue(color), RGBGetBValue(color), 0x00, 0x00
+    };
+    report[8] = CalculateChecksum(report, sizeof(report));
+    SendFeatureReport(report);
+}
+
 void AcerPredatorLogoController::SetLEDColor(RGBColor color, uint8_t brightness)
 {
     SetMode(ACER_PREDATOR_LOGO_MODE_STATIC, 5, brightness, color);
+}
+
+void AcerPredatorLogoController::SetDirect(const RGBColor* colors, size_t count, uint8_t brightness)
+{
+    std::lock_guard<std::mutex> lock(device_mutex);
+    if(!dev)
+    {
+        return;
+    }
+
+    /* DarfonUSBLogo.dll's direct path uses three independently addressable
+       RGB zones.  It first enters direct mode, then commits the three zone
+       colours as separate 0x14 reports. */
+    const uint8_t reset[ACER_PREDATOR_LOGO_FEATURE_SIZE] =
+    {
+        0x00, 0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF5
+    };
+    uint8_t direct[ACER_PREDATOR_LOGO_FEATURE_SIZE] =
+    {
+        0x00, 0x08, 0x01, 0x01, 0x05, brightness, 0x01, 0x00, 0x00
+    };
+    direct[8] = (uint8_t)~(uint8_t)(0x10 + brightness);
+
+    SendFeatureReport(reset);
+    SendFeatureReport(direct);
+
+    const uint8_t clear[ACER_PREDATOR_LOGO_FEATURE_SIZE] =
+    {
+        0x00, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC5
+    };
+    SendFeatureReport(clear);
+
+    for(uint8_t zone = 1; zone <= 3; zone++)
+    {
+        SendColourReport(zone, (colors != nullptr && zone <= count) ? colors[zone - 1] : 0);
+    }
 }
 
 void AcerPredatorLogoController::SetMode(uint8_t mode, uint8_t speed, uint8_t brightness, RGBColor color)
