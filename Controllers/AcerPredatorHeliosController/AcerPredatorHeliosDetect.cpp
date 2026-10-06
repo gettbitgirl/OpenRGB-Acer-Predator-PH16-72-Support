@@ -58,5 +58,5 @@ DetectedControllers DetectAcerPredatorHeliosLogoControllers(hid_device_info* inf
     return(detected_controllers);
 }
 
-REGISTER_HID_DETECTOR_PU("Acer Predator Helios Keyboard", DetectAcerPredatorHeliosControllers, ACER_SUNREX_VID, ACER_SUNREX_PID, ACER_SUNREX_USAGE_PAGE, ACER_SUNREX_USAGE);
-REGISTER_HID_DETECTOR_PU("Acer Predator Lid Logo", DetectAcerPredatorHeliosLogoControllers, ACER_DARFON_VID, ACER_DARFON_PID, ACER_DARFON_USAGE_PAGE, ACER_DARFON_USAGE);
+REGISTER_HID_DETECTOR_I("Acer Predator Helios Keyboard", DetectAcerPredatorHeliosControllers, ACER_SUNREX_VID, ACER_SUNREX_PID, 3);
+REGISTER_HID_DETECTOR_I("Acer Predator Lid Logo", DetectAcerPredatorHeliosLogoControllers, ACER_DARFON_VID, ACER_DARFON_PID, 0);
