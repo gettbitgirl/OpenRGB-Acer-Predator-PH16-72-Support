@@ -8,6 +8,7 @@
 \*---------------------------------------------------------*/
 
 #include "AcerPredatorLogoController.h"
+#include <algorithm>
 #include <chrono>
 #include <thread>
 
@@ -59,9 +60,21 @@ uint8_t AcerPredatorLogoController::CalculateChecksum(const uint8_t* report, siz
     return (uint8_t)(~sum);
 }
 
+void AcerPredatorLogoController::SendFeatureReport(const uint8_t* report)
+{
+    hid_send_feature_report(dev, report, ACER_PREDATOR_LOGO_FEATURE_SIZE);
+
+    /*
+       DarfonUSBLogo.dll waits 15 ms after every feature report.  The
+       controller drops later reports if they arrive before it has processed
+       the preceding one.
+    */
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+}
+
 void AcerPredatorLogoController::SetLEDColor(RGBColor color, uint8_t brightness)
 {
-    SetMode(ACER_PREDATOR_LOGO_MODE_STATIC, 0, brightness, color);
+    SetMode(ACER_PREDATOR_LOGO_MODE_STATIC, 5, brightness, color);
 }
 
 void AcerPredatorLogoController::SetMode(uint8_t mode, uint8_t speed, uint8_t brightness, RGBColor color)
@@ -72,17 +85,38 @@ void AcerPredatorLogoController::SetMode(uint8_t mode, uint8_t speed, uint8_t br
         return;
     }
 
-    uint8_t report[ACER_PREDATOR_LOGO_FEATURE_SIZE];
-    report[0] = 0x00;
-    report[1] = mode;
-    report[2] = 0x00;
-    report[3] = RGBGetRValue(color);
-    report[4] = RGBGetGValue(color);
-    report[5] = RGBGetBValue(color);
-    report[6] = (mode == ACER_PREDATOR_LOGO_MODE_STATIC) ? brightness : speed;
-    report[7] = 0x00;
-    report[8] = CalculateChecksum(report, ACER_PREDATOR_LOGO_FEATURE_SIZE);
+    /*
+       This is the transaction used by DarfonUSBLogo.dll's logo-update
+       routine.  A single colour/effect report (the old implementation) is
+       accepted by hidapi but ignored by the firmware because the controller
+       has not been woken and reset first.
+    */
+    const uint8_t wake[ACER_PREDATOR_LOGO_FEATURE_SIZE] =
+    {
+        0x00, 0xB1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4E
+    };
+    const uint8_t reset[ACER_PREDATOR_LOGO_FEATURE_SIZE] =
+    {
+        0x00, 0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF5
+    };
 
-    hid_send_feature_report(dev, report, ACER_PREDATOR_LOGO_FEATURE_SIZE);
-    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    /* Firmware speed is inverted: OpenRGB 1..9 maps to 9..1. */
+    const uint8_t firmware_speed = (uint8_t)(10 - std::min<uint8_t>(std::max<uint8_t>(speed, 1), 9));
+    uint8_t effect[ACER_PREDATOR_LOGO_FEATURE_SIZE] =
+    {
+        0x00, 0x08, 0x02, mode, firmware_speed, brightness, 0x08, 0x01, 0x00
+    };
+    effect[8] = CalculateChecksum(effect, sizeof(effect));
+
+    uint8_t colour[ACER_PREDATOR_LOGO_FEATURE_SIZE] =
+    {
+        0x00, 0x14, 0x00, 0x00,
+        RGBGetRValue(color), RGBGetGValue(color), RGBGetBValue(color), 0x00, 0x00
+    };
+    colour[8] = CalculateChecksum(colour, sizeof(colour));
+
+    SendFeatureReport(wake);
+    SendFeatureReport(reset);
+    SendFeatureReport(effect);
+    SendFeatureReport(colour);
 }
