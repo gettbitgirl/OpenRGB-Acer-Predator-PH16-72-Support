@@ -25,6 +25,7 @@ public:
     void DeviceUpdateZoneLEDs(int zone) override;
     void DeviceUpdateSingleLED(int led) override;
     void DeviceUpdateMode() override;
+    void DeviceUpdateZoneMode(int zone) override;
 
     void InitDeviceSpecificConfiguration();
     void DeviceConfigureDevice() override;

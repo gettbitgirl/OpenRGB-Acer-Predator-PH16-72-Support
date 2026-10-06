@@ -715,3 +715,8 @@ void RGBController_AcerPredatorHelios::DeviceUpdateMode()
 {
     DeviceUpdateLEDs();
 }
+
+void RGBController_AcerPredatorHelios::DeviceUpdateZoneMode(int)
+{
+    DeviceUpdateLEDs();
+}
