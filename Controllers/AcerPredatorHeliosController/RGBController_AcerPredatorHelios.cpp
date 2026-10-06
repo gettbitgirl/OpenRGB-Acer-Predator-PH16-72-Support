@@ -368,7 +368,7 @@ RGBController_AcerPredatorHelios::RGBController_AcerPredatorHelios(std::shared_p
     add_mode("Static",        ACER_PREDATOR_MODE_STATIC,    false, false, true,  false, ToRGBColor(0, 255, 255));
     add_mode("Breathing",     ACER_PREDATOR_MODE_BREATHING, true,  false, true,  true,  ToRGBColor(0, 255, 255));
     add_mode("Wave",          ACER_PREDATOR_MODE_WAVE,      true,  true,  false, true,  0);
-    add_mode("Snake",         ACER_PREDATOR_MODE_SNAKE,     true,  true,  false, true,  0);
+    add_mode("Snake",         ACER_PREDATOR_MODE_SNAKE,     true,  true,  true,  true,  ToRGBColor(0, 255, 255));
     add_mode("Ripple",        ACER_PREDATOR_MODE_RIPPLE,    true,  false, true,  true,  ToRGBColor(0, 255, 255));
     add_mode("Neon",          ACER_PREDATOR_MODE_NEON,      true,  false, false, true,  0);
     add_mode("Rain",          ACER_PREDATOR_MODE_RAIN,      true,  false, true,  true,  ToRGBColor(0, 255, 255));
@@ -377,6 +377,8 @@ RGBController_AcerPredatorHelios::RGBController_AcerPredatorHelios(std::shared_p
     add_mode("Fireball",      ACER_PREDATOR_MODE_FIREBALL,  true,  true,  true,  true,  ToRGBColor(255, 100, 0));
     add_mode("Snow",          ACER_PREDATOR_MODE_SNOW,      true,  false, true,  true,  ToRGBColor(200, 220, 255));
     add_mode("Heartbeat",     ACER_PREDATOR_MODE_HEARTBEAT, true,  false, true,  true,  ToRGBColor(255, 0, 50));
+    add_mode("Zoom",          ACER_PREDATOR_MODE_ZOOM,      true,  false, false, true,  0);
+    add_mode("Meteor",        ACER_PREDATOR_MODE_METEOR,    true,  true,  true,  true,  ToRGBColor(0, 255, 255));
     add_mode("Off",           ACER_PREDATOR_MODE_OFF,       false, false, false, false, 0);
 
     SetupZones();
@@ -473,7 +475,11 @@ void RGBController_AcerPredatorHelios::SetupZones()
     add_mag_mode("Wave",      ACER_PREDATOR_MAG_WAVE,      true,  true,  false);
     add_mag_mode("Snake",     ACER_PREDATOR_MAG_SNAKE,     true,  true,  false);
     add_mag_mode("Neon",      ACER_PREDATOR_MAG_NEON,      true,  false, false);
+    add_mag_mode("Spot",      ACER_PREDATOR_MAG_SPOT,      true,  false, false);
+    add_mag_mode("Star",      ACER_PREDATOR_MAG_STAR,      true,  false, false);
     add_mag_mode("Rainbow",   ACER_PREDATOR_MAG_RAINBOW,   true,  false, false);
+    add_mag_mode("Slash",     ACER_PREDATOR_MAG_SLASH,     true,  false, false);
+    add_mag_mode("Zoom",      ACER_PREDATOR_MAG_ZOOM,      true,  false, false);
 
     for(unsigned int i = 0; i < 12; i++)
     {
@@ -554,9 +560,9 @@ void RGBController_AcerPredatorHelios::DeviceUpdateLEDs()
 
     state.mode              = (uint8_t)current_mode.value;
     state.speed             = (uint8_t)current_mode.speed;
-    state.brightness        = (uint8_t)current_mode.brightness;
+    state.brightness        = (uint8_t)((current_mode.brightness * 0x32) / 100);
     state.direction         = (current_mode.direction == MODE_DIRECTION_LEFT) ? 2 : 1;
-    state.color_preset      = (current_mode.color_mode == MODE_COLORS_NONE || current_mode.color_mode == MODE_COLORS_RANDOM) ? 0x00 : 0x08;
+    state.color_preset      = (current_mode.color_mode == MODE_COLORS_NONE || current_mode.color_mode == MODE_COLORS_RANDOM) ? 0xE0 : 0x00;
 
     RGBColor mode_col = current_mode.colors.empty() ? ToRGBColor(0, 255, 255) : current_mode.colors[0];
     state.red   = RGBGetRValue(mode_col);
@@ -572,7 +578,7 @@ void RGBController_AcerPredatorHelios::DeviceUpdateLEDs()
         mode& mag_mode          = mag_zone.modes[mag_zone.active_mode];
         state.magkey_mode       = mag_mode.value;
         state.magkey_speed      = (uint8_t)mag_mode.speed;
-        state.magkey_brightness = (uint8_t)mag_mode.brightness;
+        state.magkey_brightness = (uint8_t)((mag_mode.brightness * 0x32) / 100);
 
         RGBColor mag_col = mag_mode.colors.empty() ? ToRGBColor(255, 100, 0) : mag_mode.colors[0];
         state.magkey_red   = RGBGetRValue(mag_col);

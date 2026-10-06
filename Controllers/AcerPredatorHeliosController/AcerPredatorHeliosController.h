@@ -49,18 +49,17 @@ enum
 {
     ACER_PREDATOR_MODE_OFF          = 0x00,
     ACER_PREDATOR_MODE_STATIC       = 0x01,
-    ACER_PREDATOR_MODE_BREATHING    = 0x03,
-    ACER_PREDATOR_MODE_WAVE         = 0x05,
-    ACER_PREDATOR_MODE_SNAKE        = 0x06,
-    ACER_PREDATOR_MODE_RIPPLE       = 0x08,
-    ACER_PREDATOR_MODE_NEON         = 0x0A,
-    ACER_PREDATOR_MODE_RAIN         = 0x12,
-    ACER_PREDATOR_MODE_LIGHTNING    = 0x22,
-    ACER_PREDATOR_MODE_STARS        = 0x25,
-    ACER_PREDATOR_MODE_FIREBALL     = 0x26,
-    ACER_PREDATOR_MODE_SNOW         = 0x27,
-    ACER_PREDATOR_MODE_HEARTBEAT    = 0x28,
-    ACER_PREDATOR_MODE_SHIFTING     = 0x29,
+    ACER_PREDATOR_MODE_BREATHING    = 0x02,
+    ACER_PREDATOR_MODE_WAVE         = 0x03,
+    ACER_PREDATOR_MODE_SNAKE        = 0x05,
+    ACER_PREDATOR_MODE_RIPPLE       = 0x06,
+    ACER_PREDATOR_MODE_NEON         = 0x08,
+    ACER_PREDATOR_MODE_RAIN         = 0x0A,
+    ACER_PREDATOR_MODE_LIGHTNING    = 0x12,
+    ACER_PREDATOR_MODE_STARS        = 0x26,
+    ACER_PREDATOR_MODE_FIREBALL     = 0x27,
+    ACER_PREDATOR_MODE_SNOW         = 0x28,
+    ACER_PREDATOR_MODE_HEARTBEAT    = 0x29,
     ACER_PREDATOR_MODE_ZOOM         = 0x2A,
     ACER_PREDATOR_MODE_METEOR       = 0x2B,
     ACER_PREDATOR_MODE_DIRECT       = 0x33, /* Direct streaming mode commit opcode */
@@ -82,6 +81,7 @@ enum
     ACER_PREDATOR_MAG_STAR          = 0x47,
     ACER_PREDATOR_MAG_RAINBOW       = 0x48,
     ACER_PREDATOR_MAG_SLASH         = 0x49,
+    ACER_PREDATOR_MAG_ZOOM          = 0x4A,
     ACER_PREDATOR_MAG_BLASTING      = 0x4E,
     ACER_PREDATOR_MAG_DIRECT        = 0x4F, /* Direct streaming mode for MagKey       */
 };
@@ -92,7 +92,7 @@ struct AcerPredatorState
     uint8_t                     speed;
     uint8_t                     brightness;
     uint8_t                     direction;
-    uint8_t                     color_preset; /* 0x08 = custom RGB, 0x00 = rainbow */
+    uint8_t                     color_preset; /* 0xE0 = rainbow/random, 0x00 = custom RGB */
     uint8_t                     red;
     uint8_t                     green;
     uint8_t                     blue;

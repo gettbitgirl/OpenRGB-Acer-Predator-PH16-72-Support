@@ -207,9 +207,20 @@ void AcerPredatorHeliosController::SendHardwareEffect(const AcerPredatorState& s
     }
 
     /*---------------------------------------------------------*\
+    | Mode OFF (0x00): Send power-down feature report           |
+    \*---------------------------------------------------------*/
+    if(state.mode == ACER_PREDATOR_MODE_OFF)
+    {
+        uint8_t off_pkt[ACER_PREDATOR_FEATURE_SIZE] = { 0x00, 0x08, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF6 };
+        hid_send_feature_report(dev, off_pkt, ACER_PREDATOR_FEATURE_SIZE);
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        return;
+    }
+
+    /*---------------------------------------------------------*\
     | Hardware Onboard Effects 4-Packet Handshake:              |
     |   Packet 1: Wake/Init (0xB1)                              |
-    |   Packet 2: Reset/Base (0xF5)                             |
+    |   Packet 2: Reset/Base ({0x08, 0x02, ..., 0xF5})          |
     |   Packet 3: Mode & Animation Parameters (0x08)            |
     |   Packet 4: Custom Zone Color (0x14)                      |
     | Each packet is a 9-byte hid_send_feature_report with      |
@@ -217,14 +228,12 @@ void AcerPredatorHeliosController::SendHardwareEffect(const AcerPredatorState& s
     \*---------------------------------------------------------*/
 
     /* Packet 1: Wake/Init */
-    uint8_t wake[ACER_PREDATOR_FEATURE_SIZE] = { 0x00, 0xB1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    wake[8] = CalculateChecksum(wake, ACER_PREDATOR_FEATURE_SIZE);
+    uint8_t wake[ACER_PREDATOR_FEATURE_SIZE] = { 0x00, 0xB1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4E };
     hid_send_feature_report(dev, wake, ACER_PREDATOR_FEATURE_SIZE);
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
 
     /* Packet 2: Reset/Base */
-    uint8_t reset[ACER_PREDATOR_FEATURE_SIZE] = { 0x00, 0xF5, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    reset[8] = CalculateChecksum(reset, ACER_PREDATOR_FEATURE_SIZE);
+    uint8_t reset[ACER_PREDATOR_FEATURE_SIZE] = { 0x00, 0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF5 };
     hid_send_feature_report(dev, reset, ACER_PREDATOR_FEATURE_SIZE);
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
 
@@ -238,7 +247,7 @@ void AcerPredatorHeliosController::SendHardwareEffect(const AcerPredatorState& s
     effect[3] = state.mode;
     effect[4] = sp_val;
     effect[5] = state.brightness;
-    effect[6] = state.color_preset;     /* 0x08 = custom RGB, 0x00 = rainbow */
+    effect[6] = state.color_preset;     /* 0xE0 = rainbow/random, 0x00 = custom RGB */
     effect[7] = state.direction;
     effect[8] = CalculateChecksum(effect, ACER_PREDATOR_FEATURE_SIZE);
     hid_send_feature_report(dev, effect, ACER_PREDATOR_FEATURE_SIZE);
@@ -307,7 +316,7 @@ void AcerPredatorHeliosController::SendMagKeyEffect(const AcerPredatorState& sta
     }
 
     /*---------------------------------------------------------*\
-    | MagKey hardware effect: Preamble + Effect commit          |
+    | MagKey hardware effect: 4-Packet Handshake                |
     | MAG_OFF (0x40): slave mini-LEDs to base WASD key colors  |
     | Other opcodes: dedicated MagKey animation                 |
     \*---------------------------------------------------------*/
@@ -317,28 +326,18 @@ void AcerPredatorHeliosController::SendMagKeyEffect(const AcerPredatorState& sta
         mag_opcode = (uint8_t)state.magkey_mode;
     }
 
-    hid_send_feature_report(dev, PREAMBLE_MAGKEY, ACER_PREDATOR_FEATURE_SIZE);
+    /* Packet 1: Wake/Init */
+    uint8_t wake[ACER_PREDATOR_FEATURE_SIZE] = { 0x00, 0xB1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4E };
+    hid_send_feature_report(dev, wake, ACER_PREDATOR_FEATURE_SIZE);
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
 
+    /* Packet 2: Reset/Base */
+    uint8_t reset[ACER_PREDATOR_FEATURE_SIZE] = { 0x00, 0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF5 };
+    hid_send_feature_report(dev, reset, ACER_PREDATOR_FEATURE_SIZE);
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+
+    /* Packet 3: MagKey WASD Mode Packet */
     uint8_t sp_val = (uint8_t)(10 - state.magkey_speed);
-
-    /* If MAG_STATIC, send a custom color packet for the MagKey zone */
-    if(mag_opcode == ACER_PREDATOR_MAG_STATIC)
-    {
-        uint8_t color[ACER_PREDATOR_FEATURE_SIZE];
-        color[0] = 0x00;
-        color[1] = 0x14;
-        color[2] = 0x00;
-        color[3] = 0x01;                // Zone: 0x01 = MagKey WASD
-        color[4] = state.magkey_red;
-        color[5] = state.magkey_green;
-        color[6] = state.magkey_blue;
-        color[7] = 0x00;
-        color[8] = CalculateChecksum(color, ACER_PREDATOR_FEATURE_SIZE);
-        hid_send_feature_report(dev, color, ACER_PREDATOR_FEATURE_SIZE);
-        std::this_thread::sleep_for(std::chrono::milliseconds(15));
-    }
-
     uint8_t mag_commit[ACER_PREDATOR_FEATURE_SIZE];
     mag_commit[0] = 0x00;
     mag_commit[1] = 0x08;
@@ -346,9 +345,23 @@ void AcerPredatorHeliosController::SendMagKeyEffect(const AcerPredatorState& sta
     mag_commit[3] = mag_opcode;
     mag_commit[4] = sp_val;
     mag_commit[5] = state.magkey_brightness;
-    mag_commit[6] = 0x01;
-    mag_commit[7] = 0x00;
+    mag_commit[6] = (mag_opcode == ACER_PREDATOR_MAG_RAINBOW || mag_opcode == ACER_PREDATOR_MAG_NEON) ? 0xE0 : 0x00;
+    mag_commit[7] = state.direction;
     mag_commit[8] = CalculateChecksum(mag_commit, ACER_PREDATOR_FEATURE_SIZE);
     hid_send_feature_report(dev, mag_commit, ACER_PREDATOR_FEATURE_SIZE);
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+
+    /* Packet 4: Custom Zone Color for Zone 1 (MagKey WASD) */
+    uint8_t color[ACER_PREDATOR_FEATURE_SIZE];
+    color[0] = 0x00;
+    color[1] = 0x14;
+    color[2] = 0x00;
+    color[3] = 0x01;                    // Zone: 0x01 = MagKey WASD
+    color[4] = state.magkey_red;
+    color[5] = state.magkey_green;
+    color[6] = state.magkey_blue;
+    color[7] = 0x00;
+    color[8] = CalculateChecksum(color, ACER_PREDATOR_FEATURE_SIZE);
+    hid_send_feature_report(dev, color, ACER_PREDATOR_FEATURE_SIZE);
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
 }
