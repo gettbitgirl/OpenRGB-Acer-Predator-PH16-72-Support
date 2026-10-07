@@ -217,12 +217,15 @@ def auto_sweep(args: argparse.Namespace) -> None:
 
     try:
         for mask in args.masks:
+            restore()
+            control = {tested: read_rgbkb_raw(args.device, tested)
+                       for tested in args.masks}
             candidate = struct.pack("<Q", rgbkb_value(mask, args.color))
             call(args.device, METHOD_SET_RGB_KB, candidate)
             after = {tested: read_rgbkb_raw(args.device, tested)
                      for tested in args.masks}
             changed = [tested for tested in args.masks
-                       if after[tested] != baseline_rgb[tested]]
+                       if after[tested] != control[tested]]
             if changed:
                 detail = ", ".join(
                     f"0x{tested:04x}={after[tested].hex(' ')}" for tested in changed)
@@ -234,11 +237,13 @@ def auto_sweep(args: argparse.Namespace) -> None:
 
         for index in args.indices:
             for value in args.values:
+                restore()
+                control = read_backlight_raw(args.device)
                 candidate = bytearray(baseline_frame)
                 candidate[index] = value
                 call(args.device, METHOD_SET_KB_BACKLIGHT, bytes(candidate))
                 after = read_backlight_raw(args.device)
-                changed = changed_offsets(baseline_frame, after)
+                changed = changed_offsets(control, after)
                 if changed:
                     print(f"FRAME byte {index} = 0x{value:02x}: CHANGED "
                           f"offsets {changed}; readback {after.hex(' ')}")
