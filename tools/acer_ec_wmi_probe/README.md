@@ -9,6 +9,10 @@ whitelists only methods 2, 20, and 21:
 * method 21: read the current 16-byte backlight state;
 * method 2: Acer's generic 64-bit gaming LED method, retained for comparison.
 
+The Windows DLL exposes provider method names rather than these Linux numeric
+IDs. The method-20/21 mapping follows the existing Linux Acer WMI RGB
+implementation; the probe deliberately keeps the numeric surface narrow.
+
 The Python client refuses every write unless `--arm` is supplied. It prints the
 exact frame before sending it. `direct` uses the Windows controller's advertised
 mode byte `0xff`, even though the Windows DLL itself skips its update path.
