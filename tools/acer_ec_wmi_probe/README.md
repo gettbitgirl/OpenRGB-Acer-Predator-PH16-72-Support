@@ -23,7 +23,7 @@ These commands build against the running kernel without rebuilding NixOS:
 
 ```sh
 cd /home/gettbit/Projects/OpenRGB/tools/acer_ec_wmi_probe
-nix shell nixpkgs#gnumake nixpkgs#gcc nixpkgs#binutils --command bash -lc '
+nix shell nixpkgs#gnumake nixpkgs#gcc nixpkgs#binutils nixpkgs#kmod --command bash -lc '
   set -eu
   KDEV=$(nix build --no-link --print-out-paths nixpkgs#linuxPackages_latest.kernel.dev)
   make -C "$KDEV/lib/modules/$(uname -r)/build" M="$PWD" modules
