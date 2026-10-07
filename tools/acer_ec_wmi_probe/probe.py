@@ -50,14 +50,14 @@ def frame(mode: int, speed: int, brightness: int, direction: int,
     red, green, blue = color
     if not 0 <= mode <= 255:
         raise ValueError("mode must fit in one byte")
-    if not 0 <= speed <= 254 or not 0 <= brightness <= 255:
+    if not 0 <= speed <= 255 or not 0 <= brightness <= 255:
         raise ValueError("speed and brightness must fit in one byte")
-    if not 0 <= direction <= 255:
-        raise ValueError("direction must fit in one byte")
+    if not 0 <= direction <= 254:
+        raise ValueError("direction must be between 0 and 254")
 
     # This is the exact layout recovered from AcerECLightbarController.dll:
-    # [mode, direction, brightness, 0, speed + 1, R, G, B, 3, 2, 0...].
-    return bytes((mode, direction, brightness, 0, speed + 1,
+    # [mode, speed, brightness, 0, direction + 1, R, G, B, 3, 2, 0...].
+    return bytes((mode, speed, brightness, 0, direction + 1,
                   red, green, blue, 0x03, tail, 0, 0, 0, 0, 0, 0))
 
 
@@ -107,8 +107,8 @@ def main() -> int:
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument("--color", type=parse_color, default=(255, 0, 0))
         command.add_argument("--brightness", type=parse_byte, default=100)
-        command.add_argument("--speed", type=parse_byte, default=0)
-        command.add_argument("--direction", type=parse_byte, default=0)
+        command.add_argument("--speed", type=parse_byte, default=5)
+        command.add_argument("--direction", type=parse_byte, default=1)
         command.add_argument("--tail", type=parse_byte, default=0x02)
         command.add_argument("--arm", action="store_true")
         command.set_defaults(kind="write", mode=mode)
@@ -116,7 +116,7 @@ def main() -> int:
     off = subparsers.add_parser("off", help="send an armed black static frame")
     off.add_argument("--arm", action="store_true")
     off.set_defaults(kind="write", mode=0, color=(0, 0, 0), brightness=0,
-                     speed=0, direction=0, tail=0x02)
+                     speed=5, direction=1, tail=0x02)
 
     sweep = subparsers.add_parser("sweep", help="test one candidate reserved/address byte")
     sweep.add_argument("index", type=int, choices=range(10, 16))
@@ -139,7 +139,7 @@ def main() -> int:
         return 0
 
     if args.kind == "sweep":
-        payload = bytearray(frame(args.mode, 0, args.brightness, 0, args.color))
+        payload = bytearray(frame(args.mode, 5, args.brightness, 1, args.color))
         payload[args.index] = args.value
         write_frame(args, bytes(payload))
         return 0

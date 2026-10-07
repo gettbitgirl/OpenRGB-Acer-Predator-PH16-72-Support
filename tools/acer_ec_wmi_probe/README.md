@@ -56,9 +56,9 @@ effect. Observe the physical bar after each command:
 
 ```sh
 nix shell nixpkgs#python3 --command python3 ./probe.py static \
-  --color ff0000 --brightness 25 --arm
+  --color ff0000 --brightness 25 --speed 5 --direction 1 --arm
 nix shell nixpkgs#python3 --command python3 ./probe.py direct \
-  --color 00ff00 --brightness 25 --arm
+  --color 00ff00 --brightness 25 --speed 5 --direction 1 --arm
 ```
 
 If Direct produces a visible result, test whether any of the six zero-filled

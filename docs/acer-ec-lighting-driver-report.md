@@ -106,10 +106,10 @@ The frame bytes recovered at `0x180003172`-`0x180003191` are:
 | Offset | Value |
 | ---: | --- |
 | 0 | selected mode byte |
-| 1 | direction low byte |
+| 1 | speed low byte |
 | 2 | brightness low byte |
 | 3 | `0x00` |
-| 4 | speed + 1 |
+| 4 | direction + 1 |
 | 5 | red |
 | 6 | green |
 | 7 | blue |
@@ -120,6 +120,11 @@ The frame bytes recovered at `0x180003172`-`0x180003191` are:
 The helper logs each byte as `input_data[%d]`, and retries a failed WMI call
 after a 30 ms sleep. This is the payload to reproduce for rear effects; it is
 not the logo's packed 64-bit LED-group ABI.
+
+The parameter order is confirmed by the call site at `0x18000fa00`: it loads
+the mode record's speed, direction, and brightness fields into the arguments
+to `0x180002ed0`, whose byte stores emit speed at offset 1 and direction+1 at
+offset 4. Earlier notes that swapped those two labels were incorrect.
 
 ## Mode table exposed by the EC-logo controller
 
