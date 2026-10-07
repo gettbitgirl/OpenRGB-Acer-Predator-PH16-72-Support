@@ -28,11 +28,14 @@ nix shell nixpkgs#gnumake nixpkgs#gcc nixpkgs#binutils nixpkgs#kmod --command ba
   KDEV=$(nix build --no-link --print-out-paths nixpkgs#linuxPackages_latest.kernel.dev)
   make -C "$KDEV/lib/modules/$(uname -r)/build" M="$PWD" modules
   sudo insmod ./acer_ec_wmi_probe.ko
+  sudo chown "$(id -un):$(id -gn)" /dev/acer_ec_wmi_probe
 '
 ```
 
-The device is root-only (`/dev/acer_ec_wmi_probe`, mode `0600`). Remove it when
-finished:
+The module creates `/dev/acer_ec_wmi_probe` as `root:root` with mode `0600`.
+The `chown` above grants the invoking user access without running the Python
+client as root. The ownership resets when the module is reloaded. Remove it
+when finished:
 
 ```sh
 sudo rmmod acer_ec_wmi_probe
@@ -46,8 +49,10 @@ Start by reading the firmware state; this does not change lighting:
 nix shell nixpkgs#python3 --command python3 ./probe.py read
 ```
 
-Then test a dim static red frame, followed by the Direct candidate. Observe the
-physical bar after each command:
+Then test a dim static red frame, followed by the Direct candidate. The client
+also reads the 16-byte state back after every write, which distinguishes a
+firmware state change from a command that was accepted but had no visible
+effect. Observe the physical bar after each command:
 
 ```sh
 nix shell nixpkgs#python3 --command python3 ./probe.py static \

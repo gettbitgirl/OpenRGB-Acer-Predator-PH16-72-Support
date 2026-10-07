@@ -50,14 +50,14 @@ def frame(mode: int, speed: int, brightness: int, direction: int,
     red, green, blue = color
     if not 0 <= mode <= 255:
         raise ValueError("mode must fit in one byte")
-    if not 0 <= speed <= 255 or not 0 <= brightness <= 255:
+    if not 0 <= speed <= 254 or not 0 <= brightness <= 255:
         raise ValueError("speed and brightness must fit in one byte")
-    if not 0 <= direction <= 254:
-        raise ValueError("direction must be between 0 and 254")
+    if not 0 <= direction <= 255:
+        raise ValueError("direction must fit in one byte")
 
     # This is the exact layout recovered from AcerECLightbarController.dll:
-    # [mode, speed, brightness, 0, direction + 1, R, G, B, 3, 2, 0...].
-    return bytes((mode, speed, brightness, 0, direction + 1,
+    # [mode, direction, brightness, 0, speed + 1, R, G, B, 3, 2, 0...].
+    return bytes((mode, direction, brightness, 0, speed + 1,
                   red, green, blue, 0x03, tail, 0, 0, 0, 0, 0, 0))
 
 
@@ -88,6 +88,8 @@ def write_frame(args: argparse.Namespace, payload: bytes) -> None:
     print(f"WMI method {METHOD_SET_KB_BACKLIGHT}, frame: {payload.hex(' ')}")
     output = call(args.device, METHOD_SET_KB_BACKLIGHT, payload)
     print(f"ACPI reply: {output.hex(' ') if output else '<empty>'}")
+    state = call(args.device, METHOD_GET_KB_BACKLIGHT, struct.pack("<Q", 1))
+    print(f"Readback ({len(state)} bytes): {state.hex(' ') if state else '<empty>'}")
 
 
 def main() -> int:
