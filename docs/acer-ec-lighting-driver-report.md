@@ -31,6 +31,12 @@ device group and does not provide a per-LED frame buffer. A Linux driver should
 expose the seven LEDs as one linear zone only if the hardware behavior is
 confirmed; the Windows controller itself sends group color/effect commands.
 
+The rear constructor also registers a `Direct` mode, but this is a controller
+capability flag rather than proof of a working direct stream. Its mode record
+contains value `0xff`, flags `0x30`, one color slot, brightness default `100`,
+and a `50` default in the remaining mode parameter field (`0x18000d332`-
+`0x18000d374`).
+
 ## WMI calls
 
 The shared EC `SetMode` routine is `0x180003230`. It issues two WMI method
@@ -112,14 +118,38 @@ separate strings/factories for front, left, right, rear, and logo EC devices;
 they must not be collapsed into the Darfon USB-logo implementation.
 
 The rear-lightbar color path is group-based and the Windows documentation
-identifies the rear zone as a seven-LED bar. The EC-logo path is one LED. A
-driver should therefore expose two separate OpenRGB devices:
+identifies the rear zone as a seven-LED bar. The rear constructor registers
+`STATIC` (value `0`), `BREATHING` (`1`), `NEON` (`2`), `WAVE` (`3`), and an
+additional `TWINKLING` entry (value `7`) in addition to `Direct` (`0xff`). The
+EC-logo path is one LED. A driver should therefore expose two separate
+OpenRGB devices:
 
 * `Acer EC Logo LED`: one RGB LED, one group selector, firmware modes plus
-  Direct color.
+  a `Direct` entry in the Windows mode metadata. As with the rear controller,
+  the logo mode updater returns before sending the WMI payload for `0xff`, so
+  the DLL does not demonstrate a working Direct color update.
 * `Acer EC Rear Lightbar`: seven physical positions represented by the one EC
   group command; no per-position streaming protocol has been recovered from
   this DLL.
+
+### Direct-mode result
+
+The rear controller's mode-update method is `0x18000fa00`. It loads the
+selected mode value from the mode record and immediately returns when that
+value is `0xff` (`0x18000fa1d`-`0x18000fa24`). Only non-`0xff` modes continue to
+the rear payload builder at `0x180002ed0`, which is the only function in this
+DLL that constructs the rear `SetGamingLEDColor`/`SetGamingLEDBehavior` WMI
+input. There is no second rear call site that streams the RGB controller's
+color array when Direct is selected.
+
+Therefore Direct is *advertised* by the Windows RGB-controller metadata, but a
+working rear direct-mode payload is not demonstrated by this DLL. The evidence
+supports a group-level direct color as a plausible EC feature (the color WMI
+method accepts RGB bytes), but it does not support per-LED direct addressing or
+a frame-buffer protocol. Implementing it on Linux would require an EC test:
+send the ordinary rear group color payload while selecting the `0xff` behavior
+and verify whether the firmware accepts it. That would be an experiment, not a
+payload recovered from PredatorSense.
 
 ## Linux implementation requirement
 
