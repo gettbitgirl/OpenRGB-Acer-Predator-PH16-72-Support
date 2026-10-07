@@ -135,3 +135,18 @@ nix shell nixpkgs#python3 --command python3 ./probe.py rgbkb-read
 `rgbkb-read` checks the PH16-71 masks plus the Windows service's
 `0x100..0x8000` candidates by default. It is read-only and does not require
 `--arm`.
+
+## One-command differential sweep
+
+For a fully automated test, `auto-sweep` snapshots method 7 and method 21,
+tests every candidate mask and frame bytes 10 through 15, compares each
+readback with the snapshot, and restores the snapshot after every case:
+
+```sh
+nix shell nixpkgs#python3 --command python3 ./probe.py auto-sweep \
+  --delay 0.10 --arm
+```
+
+It prints only `CHANGED` cases plus the baseline and restoration messages. If
+either readback method does not return the expected size, it refuses to write
+anything because it cannot guarantee restoration.

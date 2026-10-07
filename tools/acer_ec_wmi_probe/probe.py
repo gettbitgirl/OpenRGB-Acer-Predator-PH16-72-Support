@@ -26,6 +26,9 @@ METHOD_GET_KB_BACKLIGHT = 21
 MAX_DATA = 64
 REQUEST = struct.Struct("<IIIII64s64s")
 IOC_CALL = (3 << 30) | (REQUEST.size << 16) | (0xA5 << 8)
+DEFAULT_MASKS = (1, 2, 4, 8, 0x100, 0x200, 0x400, 0x800,
+                 0x1000, 0x2000, 0x4000, 0x8000)
+DEFAULT_SWEEP_VALUES = (0, 1, 2, 4, 8, 16, 32, 64, 128, 255)
 
 
 def parse_color(value: str) -> tuple[int, int, int]:
@@ -75,6 +78,16 @@ def parse_mask_list(value: str) -> tuple[int, ...]:
         raise
     if not values:
         raise argparse.ArgumentTypeError("list must contain at least one mask")
+    return values
+
+
+def parse_index_list(value: str) -> tuple[int, ...]:
+    try:
+        values = tuple(int(item.strip(), 0) for item in value.split(","))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected comma-separated indexes") from exc
+    if not values or any(index < 0 or index >= 16 for index in values):
+        raise argparse.ArgumentTypeError("indexes must be between 0 and 15")
     return values
 
 
@@ -157,6 +170,85 @@ def read_rgbkb(args: argparse.Namespace) -> None:
                       struct.pack("<Q", mask), output_capacity=8)
         print(f"WMI method {METHOD_GET_RGB_KB}, mask {mask}, reply: "
               f"{output.hex(' ') if output else '<empty>'}")
+
+
+def read_rgbkb_raw(device: str, mask: int) -> bytes:
+    return call(device, METHOD_GET_RGB_KB, struct.pack("<Q", mask),
+                output_capacity=8)
+
+
+def read_backlight_raw(device: str) -> bytes:
+    return call(device, METHOD_GET_KB_BACKLIGHT, struct.pack("<Q", 1),
+                output_capacity=16)
+
+
+def changed_offsets(before: bytes, after: bytes) -> list[int]:
+    return [index for index, (old, new) in enumerate(zip(before, after))
+            if old != new]
+
+
+def auto_sweep(args: argparse.Namespace) -> None:
+    """Run bounded differential tests and restore read-back baselines."""
+    require_arm(args)
+
+    baseline_frame = read_backlight_raw(args.device)
+    if len(baseline_frame) != 16:
+        raise SystemExit(
+            f"method 21 returned {len(baseline_frame)} bytes; refusing to write "
+            "because the baseline cannot be restored")
+
+    baseline_rgb = {}
+    for mask in args.masks:
+        value = read_rgbkb_raw(args.device, mask)
+        if len(value) != 8:
+            raise SystemExit(
+                f"method 7 mask 0x{mask:04x} returned {len(value)} bytes; "
+                "refusing to write because the baseline cannot be restored")
+        baseline_rgb[mask] = value
+
+    def restore() -> None:
+        call(args.device, METHOD_SET_KB_BACKLIGHT, baseline_frame)
+        for raw in baseline_rgb.values():
+            call(args.device, METHOD_SET_RGB_KB, raw)
+
+    print(f"Baseline method-21: {baseline_frame.hex(' ')}")
+    print("Baseline method-7: " + ", ".join(
+        f"0x{mask:04x}={baseline_rgb[mask].hex(' ')}" for mask in args.masks))
+
+    try:
+        for mask in args.masks:
+            candidate = struct.pack("<Q", rgbkb_value(mask, args.color))
+            call(args.device, METHOD_SET_RGB_KB, candidate)
+            after = {tested: read_rgbkb_raw(args.device, tested)
+                     for tested in args.masks}
+            changed = [tested for tested in args.masks
+                       if after[tested] != baseline_rgb[tested]]
+            if changed:
+                detail = ", ".join(
+                    f"0x{tested:04x}={after[tested].hex(' ')}" for tested in changed)
+                print(f"RGBKB mask 0x{mask:04x}: CHANGED {detail}")
+            else:
+                print(f"RGBKB mask 0x{mask:04x}: no readback change")
+            restore()
+            time.sleep(args.delay)
+
+        for index in args.indices:
+            for value in args.values:
+                candidate = bytearray(baseline_frame)
+                candidate[index] = value
+                call(args.device, METHOD_SET_KB_BACKLIGHT, bytes(candidate))
+                after = read_backlight_raw(args.device)
+                changed = changed_offsets(baseline_frame, after)
+                if changed:
+                    print(f"FRAME byte {index} = 0x{value:02x}: CHANGED "
+                          f"offsets {changed}; readback {after.hex(' ')}")
+                else:
+                    print(f"FRAME byte {index} = 0x{value:02x}: no readback change")
+                restore()
+                time.sleep(args.delay)
+    finally:
+        print("Restoring complete baseline")
+        restore()
 
 
 def rear_static(args: argparse.Namespace) -> None:
@@ -276,6 +368,25 @@ def main() -> int:
     rgbkb_sweep.add_argument("--arm", action="store_true")
     rgbkb_sweep.set_defaults(kind="rgbkb_sweep")
 
+    auto = subparsers.add_parser(
+        "auto-sweep",
+        help="test masks and frame bytes using readback-only change detection")
+    auto.add_argument(
+        "--masks", type=parse_mask_list, default=DEFAULT_MASKS,
+        help="comma-separated method-7 masks (default: keyboard and service candidates)")
+    auto.add_argument(
+        "--indices", type=parse_index_list, default=range(10, 16),
+        help="comma-separated frame byte indexes (default: 10..15)")
+    auto.add_argument(
+        "--values", type=parse_byte_list, default=DEFAULT_SWEEP_VALUES,
+        help="comma-separated byte values (default: 0,1,2,4,...,255)")
+    auto.add_argument("--color", type=parse_color, default=(255, 0, 0),
+                      help="candidate RGB color for method-6 writes")
+    auto.add_argument("--delay", type=float, default=0.10,
+                      help="seconds between restored test cases")
+    auto.add_argument("--arm", action="store_true")
+    auto.set_defaults(kind="auto_sweep")
+
     args = parser.parse_args()
     if not Path(args.device).exists():
         raise SystemExit(f"{args.device} is missing; build/load acer_ec_wmi_probe.ko first")
@@ -329,6 +440,10 @@ def main() -> int:
             print(f"  readback: {readback.hex(' ') if readback else '<empty>'}")
             if offset + 1 != len(args.masks):
                 time.sleep(args.delay)
+        return 0
+
+    if args.kind == "auto_sweep":
+        auto_sweep(args)
         return 0
 
     if args.kind == "rear_static":
