@@ -39,7 +39,7 @@ and a `50` default in the remaining mode parameter field (`0x18000d332`-
 
 ## WMI calls
 
-The shared EC `SetMode` routine is `0x180003230`. It issues two WMI method
+The EC-logo `SetMode` routine is `0x180003230`. It issues two WMI method
 queries against:
 
 ```
@@ -91,6 +91,36 @@ The low byte is again the literal group/device selector `0x01`. The behavior
 parameter is the translated firmware mode byte (`real_mode`) selected from the
 mode lookup table at `0x180016020`, indexed by the PredatorSense input mode.
 
+The rear-lightbar path is different. Its mode updater calls
+`0x180002ed0`, which builds a 16-byte frame and passes it to the common WMI
+helper `0x180011500`. That helper invokes:
+
+```
+SELECT * FROM AcerGamingFunction
+method: SetGamingKBBacklight
+input: gmInput SAFEARRAY containing the 16-byte frame
+```
+
+The frame bytes recovered at `0x180003172`-`0x180003191` are:
+
+| Offset | Value |
+| ---: | --- |
+| 0 | selected mode byte |
+| 1 | direction low byte |
+| 2 | brightness low byte |
+| 3 | `0x00` |
+| 4 | speed + 1 |
+| 5 | red |
+| 6 | green |
+| 7 | blue |
+| 8 | `0x03` |
+| 9 | `0x02` |
+| 10-15 | `0x00` (zero-initialized) |
+
+The helper logs each byte as `input_data[%d]`, and retries a failed WMI call
+after a 30 ms sleep. This is the payload to reproduce for rear effects; it is
+not the logo's packed 64-bit LED-group ABI.
+
 ## Mode table exposed by the EC-logo controller
 
 The logo constructor registers these modes (the constructor writes the mode
@@ -102,7 +132,7 @@ values and defaults directly):
 | Breathing | `1` | real behavior byte `3`; speed `5`; brightness `100`; one color |
 | Neon | `2` | real behavior byte `4`; speed `5`; brightness `100`; no color |
 | Wave | `3` | real behavior byte `0`; speed `5`; brightness `100`; no color |
-| Direct | `0xFF` | one direct color slot |
+| Direct | `0xFF` | one direct color slot in metadata; updater skips it |
 
 The constructor’s UI values are not the WMI behavior bytes. The four-byte table
 at `0x180016020` is indexed by the UI mode and contains
@@ -112,8 +142,8 @@ than assuming the UI values are raw firmware opcodes.
 
 ## Rear-lightbar differences
 
-The rear-lightbar controller uses the same WMI method names and packing helper,
-but has its own RGB controller factory and mode table. The DLL contains
+The rear-lightbar controller uses its own 16-byte `SetGamingKBBacklight`
+payload helper, RGB controller factory, and mode table. The DLL contains
 separate strings/factories for front, left, right, rear, and logo EC devices;
 they must not be collapsed into the Darfon USB-logo implementation.
 
@@ -128,28 +158,28 @@ OpenRGB devices:
   a `Direct` entry in the Windows mode metadata. As with the rear controller,
   the logo mode updater returns before sending the WMI payload for `0xff`, so
   the DLL does not demonstrate a working Direct color update.
-* `Acer EC Rear Lightbar`: seven physical positions represented by the one EC
-  group command; no per-position streaming protocol has been recovered from
-  this DLL.
+* `Acer EC Rear Lightbar`: seven physical positions represented by the one
+  16-byte `SetGamingKBBacklight` group frame; no per-position streaming
+  protocol has been recovered from this DLL.
 
 ### Direct-mode result
 
 The rear controller's mode-update method is `0x18000fa00`. It loads the
 selected mode value from the mode record and immediately returns when that
 value is `0xff` (`0x18000fa1d`-`0x18000fa24`). Only non-`0xff` modes continue to
-the rear payload builder at `0x180002ed0`, which is the only function in this
-DLL that constructs the rear `SetGamingLEDColor`/`SetGamingLEDBehavior` WMI
-input. There is no second rear call site that streams the RGB controller's
-color array when Direct is selected.
+the rear payload builder at `0x180002ed0`, which is the only rear call site
+that constructs the `SetGamingKBBacklight` frame. There is no second rear call
+site that streams the RGB controller's color array when Direct is selected.
 
 Therefore Direct is *advertised* by the Windows RGB-controller metadata, but a
-working rear direct-mode payload is not demonstrated by this DLL. The evidence
-supports a group-level direct color as a plausible EC feature (the color WMI
-method accepts RGB bytes), but it does not support per-LED direct addressing or
-a frame-buffer protocol. Implementing it on Linux would require an EC test:
-send the ordinary rear group color payload while selecting the `0xff` behavior
-and verify whether the firmware accepts it. That would be an experiment, not a
-payload recovered from PredatorSense.
+working rear direct-mode payload is not demonstrated by this DLL. The recovered
+frame has RGB fields, so a group-level direct color is a plausible EC feature,
+but the DLL does not send that frame for mode `0xff`; it also provides no
+per-LED index or frame-buffer protocol. Implementing Direct on Linux would
+require an EC test: send the recovered 16-byte frame with mode `0xff` (and
+chosen RGB values) through `SetGamingKBBacklight`, then verify whether the
+firmware accepts it. That would be an experiment, not a payload recovered from
+PredatorSense.
 
 ## Linux implementation requirement
 
@@ -157,8 +187,9 @@ Linux currently enumerates the WMI GUID but exposes no userspace API for
 invoking `AcerGamingFunction` methods. OpenRGB cannot send these payloads over
 the existing HID path. A complete implementation therefore needs:
 
-1. a kernel-side WMI bridge for `SetGamingLEDColor` and
-   `SetGamingLEDBehavior`, preserving the 64-bit little-endian `gmInput`; and
+1. a kernel-side WMI bridge for the logo's `SetGamingLEDColor`/
+   `SetGamingLEDBehavior` calls and the rear `SetGamingKBBacklight` call,
+   preserving each method's exact `gmInput` representation; and
 2. OpenRGB EC controllers that call that bridge and present the separate logo
    and rear-lightbar devices.
 
