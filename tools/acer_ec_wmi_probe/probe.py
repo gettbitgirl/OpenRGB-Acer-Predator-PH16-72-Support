@@ -20,6 +20,7 @@ GUID = "7A4DDFE7-5B5D-40B4-8595-4408E0CC7F56"
 DEVICE = "/dev/acer_ec_wmi_probe"
 METHOD_SET_LED = 2
 METHOD_SET_RGB_KB = 6
+METHOD_GET_RGB_KB = 7
 METHOD_SET_KB_BACKLIGHT = 20
 METHOD_GET_KB_BACKLIGHT = 21
 MAX_DATA = 64
@@ -118,6 +119,14 @@ def write_rgbkb(args: argparse.Namespace) -> None:
     print(f"ACPI reply: {output.hex(' ') if output else '<empty>'}")
 
 
+def read_rgbkb(args: argparse.Namespace) -> None:
+    for mask in (1, 2, 4, 8):
+        output = call(args.device, METHOD_GET_RGB_KB,
+                      struct.pack("<Q", mask), output_capacity=8)
+        print(f"WMI method {METHOD_GET_RGB_KB}, mask {mask}, reply: "
+              f"{output.hex(' ') if output else '<empty>'}")
+
+
 def rear_static(args: argparse.Namespace) -> None:
     """Try the captured PH16-71 static-color commit sequence.
 
@@ -181,6 +190,10 @@ def main() -> int:
     rgbkb.add_argument("--arm", action="store_true")
     rgbkb.set_defaults(kind="rgbkb")
 
+    rgbkb_read = subparsers.add_parser(
+        "rgbkb-read", help="read SetGamingRgbKb state for keyboard/lightbar masks")
+    rgbkb_read.set_defaults(kind="rgbkb_read")
+
     rear = subparsers.add_parser(
         "rear-static",
         help="try the captured arm/commit/three-zone static-color sequence")
@@ -219,6 +232,10 @@ def main() -> int:
 
     if args.kind == "rgbkb":
         write_rgbkb(args)
+        return 0
+
+    if args.kind == "rgbkb_read":
+        read_rgbkb(args)
         return 0
 
     if args.kind == "rear_static":

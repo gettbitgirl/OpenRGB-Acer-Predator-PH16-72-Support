@@ -3,12 +3,13 @@
 This is an intentionally separate, root-only test tool for the PH16-72 rear
 lightbar. It does not change the OpenRGB driver. The kernel module calls the
 existing Linux WMI core for GUID `7A4DDFE7-5B5D-40B4-8595-4408E0CC7F56` and
-whitelists only methods 2, 6, 20, and 21:
+whitelists only methods 2, 6, 7, 20, and 21:
 
 * method 20: `SetGamingKBBacklight`, the 16-byte rear-lightbar frame;
 * method 21: read the current 16-byte backlight state;
 * method 2: `SetGamingLED`, the 12-byte lightbar arm/priming array;
 * method 6: `SetGamingRgbKb`, a captured 64-bit zone-color write.
+* method 7: `GetGamingRgbKb`, readback for the same zone masks;
 
 The Windows DLL exposes provider method names rather than these Linux numeric
 IDs. The method-20/21 mapping follows the existing Linux Acer WMI RGB
@@ -107,4 +108,10 @@ single zone after the sequence, use its mask (`1` left, `2` center, `4` right):
 ```sh
 nix shell nixpkgs#python3 --command python3 ./probe.py rgbkb \
   --mask 1 --color 00ff00 --arm
+```
+
+Read the four candidate zone masks before and after a write:
+
+```sh
+nix shell nixpkgs#python3 --command python3 ./probe.py rgbkb-read
 ```
