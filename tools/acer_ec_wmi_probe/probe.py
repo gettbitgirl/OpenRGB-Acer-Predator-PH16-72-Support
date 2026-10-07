@@ -48,6 +48,36 @@ def parse_byte(value: str) -> int:
     return parsed
 
 
+def parse_mask(value: str) -> int:
+    try:
+        parsed = int(value, 0)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected an integer mask") from exc
+    if not 0 < parsed <= 0xFFFF:
+        raise argparse.ArgumentTypeError("mask must be between 1 and 0xffff")
+    return parsed
+
+
+def parse_byte_list(value: str) -> tuple[int, ...]:
+    try:
+        values = tuple(parse_byte(item.strip()) for item in value.split(","))
+    except argparse.ArgumentTypeError:
+        raise
+    if not values:
+        raise argparse.ArgumentTypeError("list must contain at least one byte")
+    return values
+
+
+def parse_mask_list(value: str) -> tuple[int, ...]:
+    try:
+        values = tuple(parse_mask(item.strip()) for item in value.split(","))
+    except argparse.ArgumentTypeError:
+        raise
+    if not values:
+        raise argparse.ArgumentTypeError("list must contain at least one mask")
+    return values
+
+
 def frame(mode: int, speed: int, brightness: int, direction: int,
           color: tuple[int, int, int], tail: int = 0x02) -> bytes:
     red, green, blue = color
@@ -96,14 +126,16 @@ def write_frame(args: argparse.Namespace, payload: bytes) -> None:
 
 
 def rgbkb_value(mask: int, color: tuple[int, int, int]) -> int:
-    """Pack the PH16-71 captured SetGamingRgbKb value.
+    """Pack a SetGamingRgbKb value.
 
     This is deliberately kept separate from the method-20 frame: on the
     sibling PH16-71 capture, method 20 committed mode/brightness while this
-    method carried the actual RGB value for one of three lightbar zones.
+    method carried the actual RGB value for one of three lightbar zones. The
+    Windows service also constructs masks in the 0x100..0x8000 range for its
+    shared EC-keyboard helper, so those masks are accepted for experiments.
     """
-    if mask not in (1, 2, 4):
-        raise ValueError("mask must be 1, 2, or 4")
+    if not 0 < mask <= 0xFFFF:
+        raise ValueError("mask must be between 1 and 0xffff")
     red, green, blue = color
     return ((red << 8) | (green << 16) | (blue << 24) |
             (0x08 << 32) | (mask << 40))
@@ -120,7 +152,7 @@ def write_rgbkb(args: argparse.Namespace) -> None:
 
 
 def read_rgbkb(args: argparse.Namespace) -> None:
-    for mask in (1, 2, 4, 8):
+    for mask in args.masks:
         output = call(args.device, METHOD_GET_RGB_KB,
                       struct.pack("<Q", mask), output_capacity=8)
         print(f"WMI method {METHOD_GET_RGB_KB}, mask {mask}, reply: "
@@ -146,7 +178,7 @@ def rear_static(args: argparse.Namespace) -> None:
         print(f"commit {iteration + 1}: arm reply "
               f"{arm_reply.hex(' ') if arm_reply else '<empty>'}; "
               f"commit reply {commit_reply.hex(' ') if commit_reply else '<empty>'}")
-        for mask in (1, 2, 4):
+        for mask in args.masks:
             value = rgbkb_value(mask, args.color)
             payload = struct.pack("<Q", value)
             reply = call(args.device, METHOD_SET_RGB_KB, payload)
@@ -184,14 +216,19 @@ def main() -> int:
 
     rgbkb = subparsers.add_parser(
         "rgbkb", help="send one captured SetGamingRgbKb zone-color value")
-    rgbkb.add_argument("--mask", type=int, choices=(1, 2, 4), required=True,
-                       help="zone bitmask: 1=left, 2=center, 4=right")
+    rgbkb.add_argument("--mask", type=parse_mask, required=True,
+                       help="zone bitmask, e.g. 1, 2, 4 or 0x100..0x8000")
     rgbkb.add_argument("--color", type=parse_color, default=(255, 0, 0))
     rgbkb.add_argument("--arm", action="store_true")
     rgbkb.set_defaults(kind="rgbkb")
 
     rgbkb_read = subparsers.add_parser(
         "rgbkb-read", help="read SetGamingRgbKb state for keyboard/lightbar masks")
+    rgbkb_read.add_argument(
+        "--masks", type=parse_mask_list,
+        default=(1, 2, 4, 8, 0x100, 0x200, 0x400, 0x800,
+                 0x1000, 0x2000, 0x4000, 0x8000),
+        help="comma-separated masks; defaults include service zone bits 8..15")
     rgbkb_read.set_defaults(kind="rgbkb_read")
 
     rear = subparsers.add_parser(
@@ -201,17 +238,43 @@ def main() -> int:
     rear.add_argument("--brightness", type=parse_byte, default=100)
     rear.add_argument("--delay", type=float, default=0.065,
                       help="seconds between repeated commits (default: 0.065)")
+    rear.add_argument("--masks", type=parse_mask_list, default=(1, 2, 4),
+                      help="comma-separated method-6 masks (default: 1,2,4)")
     rear.add_argument("--arm", action="store_true")
     rear.set_defaults(kind="rear_static")
 
     sweep = subparsers.add_parser("sweep", help="test one candidate reserved/address byte")
-    sweep.add_argument("index", type=int, choices=range(10, 16))
-    sweep.add_argument("--value", type=parse_byte, default=1)
+    sweep.add_argument("index", type=int, choices=range(16))
+    sweep.add_argument("--value", type=parse_byte, default=None,
+                       help="single value to test (legacy form)")
+    sweep.add_argument("--values", type=parse_byte_list,
+                       help="comma-separated values to test in one run")
     sweep.add_argument("--mode", type=parse_byte, default=0xFF)
     sweep.add_argument("--color", type=parse_color, default=(255, 0, 0))
     sweep.add_argument("--brightness", type=parse_byte, default=100)
+    sweep.add_argument("--speed", type=parse_byte, default=5)
+    sweep.add_argument("--direction", type=parse_byte, default=1)
+    sweep.add_argument("--tail", type=parse_byte, default=0x02)
+    sweep.add_argument("--pause", type=float, default=0.10,
+                       help="seconds between candidate writes")
+    sweep.add_argument("--restore", action="store_true",
+                       help="restore the baseline frame after testing")
     sweep.add_argument("--arm", action="store_true")
     sweep.set_defaults(kind="sweep")
+
+    rgbkb_sweep = subparsers.add_parser(
+        "rgbkb-sweep",
+        help="write/read candidate SetGamingRgbKb masks one at a time")
+    rgbkb_sweep.add_argument(
+        "--masks", type=parse_mask_list,
+        default=(1, 2, 4, 8, 0x100, 0x200, 0x400, 0x800,
+                 0x1000, 0x2000, 0x4000, 0x8000),
+        help="comma-separated masks; defaults include service zone bits 8..15")
+    rgbkb_sweep.add_argument("--color", type=parse_color, default=(255, 0, 0))
+    rgbkb_sweep.add_argument("--delay", type=float, default=0.10,
+                             help="seconds between candidate writes")
+    rgbkb_sweep.add_argument("--arm", action="store_true")
+    rgbkb_sweep.set_defaults(kind="rgbkb_sweep")
 
     args = parser.parse_args()
     if not Path(args.device).exists():
@@ -225,9 +288,23 @@ def main() -> int:
         return 0
 
     if args.kind == "sweep":
-        payload = bytearray(frame(args.mode, 5, args.brightness, 1, args.color))
-        payload[args.index] = args.value
-        write_frame(args, bytes(payload))
+        if args.value is not None and args.values is not None:
+            raise SystemExit("use either --value or --values, not both")
+        values = args.values
+        if values is None:
+            values = (1 if args.value is None else args.value,)
+        baseline = frame(args.mode, args.speed, args.brightness, args.direction,
+                         args.color, args.tail)
+        for offset, value in enumerate(values):
+            payload = bytearray(baseline)
+            payload[args.index] = value
+            print(f"Sweep {offset + 1}/{len(values)}: byte {args.index} = 0x{value:02x}")
+            write_frame(args, bytes(payload))
+            if offset + 1 != len(values):
+                time.sleep(args.pause)
+        if args.restore:
+            print("Restoring baseline frame")
+            write_frame(args, baseline)
         return 0
 
     if args.kind == "rgbkb":
@@ -236,6 +313,22 @@ def main() -> int:
 
     if args.kind == "rgbkb_read":
         read_rgbkb(args)
+        return 0
+
+    if args.kind == "rgbkb_sweep":
+        require_arm(args)
+        for offset, mask in enumerate(args.masks):
+            value = rgbkb_value(mask, args.color)
+            payload = struct.pack("<Q", value)
+            print(f"Sweep {offset + 1}/{len(args.masks)}: mask 0x{mask:04x}, "
+                  f"value 0x{value:016x}, bytes: {payload.hex(' ')}")
+            output = call(args.device, METHOD_SET_RGB_KB, payload)
+            print(f"  write reply: {output.hex(' ') if output else '<empty>'}")
+            readback = call(args.device, METHOD_GET_RGB_KB,
+                            struct.pack("<Q", mask), output_capacity=8)
+            print(f"  readback: {readback.hex(' ') if readback else '<empty>'}")
+            if offset + 1 != len(args.masks):
+                time.sleep(args.delay)
         return 0
 
     if args.kind == "rear_static":

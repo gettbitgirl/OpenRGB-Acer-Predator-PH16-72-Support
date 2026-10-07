@@ -8,7 +8,10 @@ whitelists only methods 2, 6, 7, 20, and 21:
 * method 20: `SetGamingKBBacklight`, the 16-byte rear-lightbar frame;
 * method 21: read the current 16-byte backlight state;
 * method 2: `SetGamingLED`, the 12-byte lightbar arm/priming array;
-* method 6: `SetGamingRgbKb`, a captured 64-bit zone-color write.
+* method 6: `SetGamingRgbKb`, a captured 64-bit zone-color write. The
+  Windows service also constructs masks in bits `8..15`, so the probe accepts
+  those masks for differential testing in addition to the PH16-71 masks
+  `1`, `2`, and `4`.
 * method 7: `GetGamingRgbKb`, readback for the same zone masks;
 
 The Windows DLL exposes provider method names rather than these Linux numeric
@@ -63,18 +66,31 @@ nix shell nixpkgs#python3 --command python3 ./probe.py direct \
   --color 00ff00 --brightness 25 --speed 5 --direction 1 --arm
 ```
 
-If Direct produces a visible result, test whether any of the six zero-filled
-trailing bytes behave like an address/segment selector. Run one command at a
-time and watch whether only part of the bar changes:
+If Direct produces a visible result, test whether any frame byte behaves like
+an address/segment selector. The `sweep` command accepts every byte position,
+can run a bounded value list, reads method 21 after every write, and can
+restore the baseline:
 
 ```sh
-nix shell nixpkgs#python3 --command python3 ./probe.py sweep 10 --value 1 --arm
-nix shell nixpkgs#python3 --command python3 ./probe.py sweep 11 --value 1 --arm
-nix shell nixpkgs#python3 --command python3 ./probe.py sweep 12 --value 1 --arm
-nix shell nixpkgs#python3 --command python3 ./probe.py sweep 13 --value 1 --arm
-nix shell nixpkgs#python3 --command python3 ./probe.py sweep 14 --value 1 --arm
-nix shell nixpkgs#python3 --command python3 ./probe.py sweep 15 --value 1 --arm
+nix shell nixpkgs#python3 --command python3 ./probe.py sweep 10 \
+  --values 0,1,2,4,8,16,32,64,128,255 --restore --arm
+nix shell nixpkgs#python3 --command python3 ./probe.py sweep 11 \
+  --values 0,1,2,4,8,16,32,64,128,255 --restore --arm
 ```
+
+The Windows service also contains a separate `SetGamingRgbKbSettingFunction()`
+path that explicitly generates zone bits `0x100` through `0x8000`. Test those
+candidate masks one at a time; each write is followed by method-7 readback:
+
+```sh
+nix shell nixpkgs#python3 --command python3 ./probe.py rgbkb-sweep \
+  --masks 0x100,0x200,0x400,0x800,0x1000,0x2000,0x4000,0x8000 \
+  --color ff0000 --delay 0.15 --arm
+```
+
+Those masks are from the shared EC-keyboard helper, not proven rear-lightbar
+fields. Any physical response must therefore be correlated with the bar
+before treating this as a driver protocol.
 
 Restore the bar to black static before unloading:
 
@@ -110,8 +126,12 @@ nix shell nixpkgs#python3 --command python3 ./probe.py rgbkb \
   --mask 1 --color 00ff00 --arm
 ```
 
-Read the four candidate zone masks before and after a write:
+Read the candidate zone masks before and after a write:
 
 ```sh
 nix shell nixpkgs#python3 --command python3 ./probe.py rgbkb-read
 ```
+
+`rgbkb-read` checks the PH16-71 masks plus the Windows service's
+`0x100..0x8000` candidates by default. It is read-only and does not require
+`--arm`.
