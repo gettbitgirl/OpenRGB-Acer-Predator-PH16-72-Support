@@ -24,12 +24,18 @@ The EC-logo RGB controller constructor (`0x18000fa9d`) creates one LED entry
 named `Logo LED`; its Direct mode has one color slot. The logo is therefore one
 logical RGB LED, not an addressable matrix.
 
-The rear-lightbar constructor creates the rear-lightbar device and its LED
-entry. The model documentation identifies this as a seven-LED linear bar. The
-EC DLL's mode/color API is group-based, however: the WMI payload selects the
-device group and does not provide a per-LED frame buffer. A Linux driver should
-expose the seven LEDs as one linear zone only if the hardware behavior is
-confirmed; the Windows controller itself sends group color/effect commands.
+The rear-lightbar constructor creates the rear-lightbar device and then calls
+`SetupZones()` at `0x18000f5e0`. That routine copies an LED count from the
+factory/model object (`[this+0x1c0]+0x20`), stores it at `[this+0x1c8]`, and
+creates one logical LED entry for each count. It labels a count of five or
+more `Infinity Mirror LED`, otherwise `Rear LightBar LED`. The PH16-72 model
+documentation identifies the physical bar as seven positions, but the DLL
+itself is parameterized rather than hard-coding seven.
+
+The mode/color API is group-based: the WMI payload selects the device group
+and does not contain a per-LED frame buffer. The existence of multiple logical
+LED entries therefore does not, by itself, prove that the EC accepts separate
+colors for those entries.
 
 The rear constructor also registers a `Direct` mode, but this is a controller
 capability flag rather than proof of a working direct stream. Its mode record
@@ -176,15 +182,33 @@ the rear payload builder at `0x180002ed0`, which is the only rear call site
 that constructs the `SetGamingKBBacklight` frame. There is no second rear call
 site that streams the RGB controller's color array when Direct is selected.
 
+The virtual dispatch table makes this negative result explicit. The rear
+vtable at `0x1800163e8` has these RGB-controller update slots:
+
+| Vtable offset | Windows service name | Rear target | Effect |
+| ---: | --- | --- | --- |
+| `+0xd8` (`216`) | `UpdateLEDs` | `0x1800088b0` | immediate `ret` |
+| `+0xe0` (`224`) | `UpdateZoneLEDs` | `0x18000af00` | thunk dispatching back to `+0xd8` |
+| `+0xe8` (`232`) | `UpdateSingleLED` | `0x18000af10` | state write only; no WMI call |
+| `+0xf0` (`240`) | `UpdateMode` | `0x18000fa00` | builds `SetGamingKBBacklight` frame |
+
+The slot names are not inferred from generic C++ ordering: the companion
+`AcerLightingService.exe` network controller contains the corresponding
+`NetworkClient::SendRequest_RGBController_UpdateLEDs`, `...UpdateZoneLEDs`,
+and `...UpdateSingleLED` strings at those virtual offsets. PredatorSense's
+rear implementation therefore only transmits effect-mode changes. Its
+`Direct` entry is metadata exposed by the common RGB-controller UI, not a
+working per-LED transport in this Windows DLL.
+
 Therefore Direct is *advertised* by the Windows RGB-controller metadata, but a
-working rear direct-mode payload is not demonstrated by this DLL. The recovered
-frame has RGB fields, so a group-level direct color is a plausible EC feature,
-but the DLL does not send that frame for mode `0xff`; it also provides no
-per-LED index or frame-buffer protocol. Implementing Direct on Linux would
-require an EC test: send the recovered 16-byte frame with mode `0xff` (and
-chosen RGB values) through `SetGamingKBBacklight`, then verify whether the
-firmware accepts it. That would be an experiment, not a payload recovered from
-PredatorSense.
+working rear direct-mode payload is not implemented by this DLL. The recovered
+frame has RGB fields, so a group-level direct color remains a possible
+undocumented EC feature, but PredatorSense never sends it for mode `0xff` and
+supplies no per-LED index or frame-buffer protocol. Implementing Direct on
+Linux would require an EC experiment: send the recovered 16-byte frame with
+mode `0xff` and chosen RGB values through `SetGamingKBBacklight`, then verify
+whether the firmware accepts it. That would be a new probe, not a payload
+recovered from PredatorSense.
 
 ### Separate static-color protocol hypothesis
 
