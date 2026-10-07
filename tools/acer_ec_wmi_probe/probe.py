@@ -12,12 +12,14 @@ import fcntl
 import os
 import struct
 import sys
+import time
 from pathlib import Path
 
 
 GUID = "7A4DDFE7-5B5D-40B4-8595-4408E0CC7F56"
 DEVICE = "/dev/acer_ec_wmi_probe"
 METHOD_SET_LED = 2
+METHOD_SET_RGB_KB = 6
 METHOD_SET_KB_BACKLIGHT = 20
 METHOD_GET_KB_BACKLIGHT = 21
 MAX_DATA = 64
@@ -92,6 +94,59 @@ def write_frame(args: argparse.Namespace, payload: bytes) -> None:
     print(f"Readback ({len(state)} bytes): {state.hex(' ') if state else '<empty>'}")
 
 
+def rgbkb_value(mask: int, color: tuple[int, int, int]) -> int:
+    """Pack the PH16-71 captured SetGamingRgbKb value.
+
+    This is deliberately kept separate from the method-20 frame: on the
+    sibling PH16-71 capture, method 20 committed mode/brightness while this
+    method carried the actual RGB value for one of three lightbar zones.
+    """
+    if mask not in (1, 2, 4):
+        raise ValueError("mask must be 1, 2, or 4")
+    red, green, blue = color
+    return ((red << 8) | (green << 16) | (blue << 24) |
+            (0x08 << 32) | (mask << 40))
+
+
+def write_rgbkb(args: argparse.Namespace) -> None:
+    require_arm(args)
+    value = rgbkb_value(args.mask, args.color)
+    payload = struct.pack("<Q", value)
+    print(f"WMI method {METHOD_SET_RGB_KB}, mask {args.mask}, value 0x{value:016x}, "
+          f"bytes: {payload.hex(' ')}")
+    output = call(args.device, METHOD_SET_RGB_KB, payload)
+    print(f"ACPI reply: {output.hex(' ') if output else '<empty>'}")
+
+
+def rear_static(args: argparse.Namespace) -> None:
+    """Try the captured PH16-71 static-color commit sequence.
+
+    This is an experiment for PH16-72, not a claim that the current Windows
+    DLL uses this path.  The sequence is repeated three times because that is
+    what the captured PredatorSense replacement did on the sibling chassis.
+    """
+    require_arm(args)
+    arm = bytes((0x10, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0x15, 0, 0))
+    commit = bytes((0, 0, args.brightness, 0, 0, 0, 0, 0, 0x03, 0x02,
+                    0, 0, 0, 0, 0, 0))
+    print(f"WMI method {METHOD_SET_LED}, arm: {arm.hex(' ')}")
+    print(f"WMI method {METHOD_SET_KB_BACKLIGHT}, commit: {commit.hex(' ')}")
+    for iteration in range(3):
+        arm_reply = call(args.device, METHOD_SET_LED, arm)
+        commit_reply = call(args.device, METHOD_SET_KB_BACKLIGHT, commit)
+        print(f"commit {iteration + 1}: arm reply "
+              f"{arm_reply.hex(' ') if arm_reply else '<empty>'}; "
+              f"commit reply {commit_reply.hex(' ') if commit_reply else '<empty>'}")
+        for mask in (1, 2, 4):
+            value = rgbkb_value(mask, args.color)
+            payload = struct.pack("<Q", value)
+            reply = call(args.device, METHOD_SET_RGB_KB, payload)
+            print(f"  method {METHOD_SET_RGB_KB}, mask {mask}, bytes "
+                  f"{payload.hex(' ')}, reply {reply.hex(' ') if reply else '<empty>'}")
+        if iteration != 2:
+            time.sleep(args.delay)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", default=DEVICE)
@@ -118,6 +173,24 @@ def main() -> int:
     off.set_defaults(kind="write", mode=0, color=(0, 0, 0), brightness=0,
                      speed=5, direction=1, tail=0x02)
 
+    rgbkb = subparsers.add_parser(
+        "rgbkb", help="send one captured SetGamingRgbKb zone-color value")
+    rgbkb.add_argument("--mask", type=int, choices=(1, 2, 4), required=True,
+                       help="zone bitmask: 1=left, 2=center, 4=right")
+    rgbkb.add_argument("--color", type=parse_color, default=(255, 0, 0))
+    rgbkb.add_argument("--arm", action="store_true")
+    rgbkb.set_defaults(kind="rgbkb")
+
+    rear = subparsers.add_parser(
+        "rear-static",
+        help="try the captured arm/commit/three-zone static-color sequence")
+    rear.add_argument("--color", type=parse_color, default=(255, 0, 0))
+    rear.add_argument("--brightness", type=parse_byte, default=100)
+    rear.add_argument("--delay", type=float, default=0.065,
+                      help="seconds between repeated commits (default: 0.065)")
+    rear.add_argument("--arm", action="store_true")
+    rear.set_defaults(kind="rear_static")
+
     sweep = subparsers.add_parser("sweep", help="test one candidate reserved/address byte")
     sweep.add_argument("index", type=int, choices=range(10, 16))
     sweep.add_argument("--value", type=parse_byte, default=1)
@@ -142,6 +215,14 @@ def main() -> int:
         payload = bytearray(frame(args.mode, 5, args.brightness, 1, args.color))
         payload[args.index] = args.value
         write_frame(args, bytes(payload))
+        return 0
+
+    if args.kind == "rgbkb":
+        write_rgbkb(args)
+        return 0
+
+    if args.kind == "rear_static":
+        rear_static(args)
         return 0
 
     write_frame(args, frame(args.mode, args.speed, args.brightness,

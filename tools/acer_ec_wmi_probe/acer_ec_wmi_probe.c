@@ -12,6 +12,7 @@
 
 #define ACER_EC_WMI_GUID "7A4DDFE7-5B5D-40B4-8595-4408E0CC7F56"
 #define ACER_EC_SET_GAMING_LED_METHOD 2
+#define ACER_EC_SET_GAMING_RGB_KB_METHOD 6
 #define ACER_EC_SET_GAMING_KB_BACKLIGHT_METHOD 20
 #define ACER_EC_GET_GAMING_KB_BACKLIGHT_METHOD 21
 
@@ -23,6 +24,9 @@ static bool valid_request(const struct acer_ec_wmi_request *request)
 
     switch (request->method_id) {
     case ACER_EC_SET_GAMING_LED_METHOD:
+        /* PH16-71/72 exposes SetGamingLED as a 12-byte byte array. */
+        return request->input_len == 12;
+    case ACER_EC_SET_GAMING_RGB_KB_METHOD:
         return request->input_len == sizeof(__u64);
     case ACER_EC_SET_GAMING_KB_BACKLIGHT_METHOD:
         return request->input_len == 16;

@@ -186,6 +186,28 @@ chosen RGB values) through `SetGamingKBBacklight`, then verify whether the
 firmware accepts it. That would be an experiment, not a payload recovered from
 PredatorSense.
 
+### Separate static-color protocol hypothesis
+
+The PH16-72 tests showed that method 20 accepts every tested mode value but
+leaves the rear color unchanged. This is consistent with a second protocol
+reported for the closely related PH16-71: a fixed 12-byte `SetGamingLED`
+priming write, a method-20 mode/brightness commit with zero RGB bytes, and
+three `SetGamingRgbKb` u64 writes. The captured u64 packing is:
+
+```c
+value = (R << 8) | (G << 16) | (B << 24) |
+        (0x08ULL << 32) | ((uint64_t)zone_mask << 40);
+```
+
+The masks were `1`, `2`, and `4` for left, center, and right on that unit;
+the complete five-call group was repeated three times. This sequence is not
+present in `AcerECLightbarController.dll`, and the PH16-71 capture is not
+proof that the PH16-72 firmware has identical semantics. It is therefore
+implemented only in the guarded probe as `rear-static`, so it can be tested
+without silently changing the recovered Windows-effect path. A successful
+PH16-72 test would establish the missing static/direct transport and should
+then be promoted into the driver after confirming the zone count and cadence.
+
 ## Linux implementation requirement
 
 Linux currently enumerates the WMI GUID but exposes no userspace API for
