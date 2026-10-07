@@ -19,13 +19,12 @@
 enum
 {
     ACER_PREDATOR_LOGO_MODE_DIRECT    = 0xFF,
-    /* The Darfon controller uses the same effect identifiers as the
-       Sunrex controller.  These are the identifiers passed to the
-       controller's four-report effect transaction, not USB commands. */
+    /* Effect bytes used by DarfonUSBLogo.dll's four-report transaction.
+       These are firmware opcodes, not PredatorSense's UI mode IDs. */
     ACER_PREDATOR_LOGO_MODE_STATIC    = 0x01,
     ACER_PREDATOR_LOGO_MODE_BREATHING = 0x02,
-    ACER_PREDATOR_LOGO_MODE_NEON      = 0x0A,
-    ACER_PREDATOR_LOGO_MODE_RAIN      = 0x12,
+    ACER_PREDATOR_LOGO_MODE_WAVE      = 0x03,
+    ACER_PREDATOR_LOGO_MODE_NEON      = 0x08,
 };
 
 class AcerPredatorLogoController

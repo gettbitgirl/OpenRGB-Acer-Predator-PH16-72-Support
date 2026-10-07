@@ -71,6 +71,19 @@ RGBController_AcerPredatorLogo::RGBController_AcerPredatorLogo(std::shared_ptr<A
     Breathing.colors.resize(1, 0x00AEC7);
     modes.push_back(Breathing);
 
+    mode Wave;
+    Wave.name           = "Wave";
+    Wave.value          = ACER_PREDATOR_LOGO_MODE_WAVE;
+    Wave.flags          = MODE_FLAG_HAS_BRIGHTNESS | MODE_FLAG_HAS_SPEED;
+    Wave.color_mode     = MODE_COLORS_NONE;
+    Wave.brightness_min = 0;
+    Wave.brightness_max = 100;
+    Wave.brightness     = 100;
+    Wave.speed_min      = 1;
+    Wave.speed_max      = 9;
+    Wave.speed          = 5;
+    modes.push_back(Wave);
+
     mode Neon;
     Neon.name           = "Neon";
     Neon.value          = ACER_PREDATOR_LOGO_MODE_NEON;
