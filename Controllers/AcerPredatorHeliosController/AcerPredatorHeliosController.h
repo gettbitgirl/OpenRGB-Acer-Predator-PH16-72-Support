@@ -99,6 +99,7 @@ struct AcerPredatorState
     int                         magkey_mode;
     uint8_t                     magkey_speed;
     uint8_t                     magkey_brightness;
+    uint8_t                     magkey_direction;
     uint8_t                     magkey_red;
     uint8_t                     magkey_green;
     uint8_t                     magkey_blue;

@@ -332,7 +332,14 @@ RGBController_AcerPredatorHelios::RGBController_AcerPredatorHelios(std::shared_p
         }
         if(has_dir)
         {
-            m.flags           |= MODE_FLAG_HAS_DIRECTION_LR;
+            if(std::string(m_name) == "Wave")
+            {
+                m.flags       |= MODE_FLAG_HAS_DIRECTION_LR | MODE_FLAG_HAS_DIRECTION_UD | MODE_FLAG_HAS_DIRECTION_HV;
+            }
+            else
+            {
+                m.flags       |= MODE_FLAG_HAS_DIRECTION_LR;
+            }
             m.direction        = MODE_DIRECTION_RIGHT;
         }
         m.color_mode           = has_color ? MODE_COLORS_MODE_SPECIFIC : (has_random ? MODE_COLORS_RANDOM : MODE_COLORS_NONE);
@@ -453,7 +460,14 @@ void RGBController_AcerPredatorHelios::SetupZones()
         }
         if(has_dir)
         {
-            m.flags           |= MODE_FLAG_HAS_DIRECTION_LR;
+            if(std::string(m_name) == "Wave")
+            {
+                m.flags       |= MODE_FLAG_HAS_DIRECTION_LR | MODE_FLAG_HAS_DIRECTION_UD | MODE_FLAG_HAS_DIRECTION_HV;
+            }
+            else
+            {
+                m.flags       |= MODE_FLAG_HAS_DIRECTION_LR;
+            }
             m.direction        = MODE_DIRECTION_RIGHT;
         }
         m.color_mode           = has_color ? MODE_COLORS_MODE_SPECIFIC : MODE_COLORS_NONE;
@@ -552,6 +566,27 @@ void RGBController_AcerPredatorHelios::DeviceUpdateDeviceSpecificConfiguration()
     DeviceUpdateLEDs();
 }
 
+static uint8_t ConvertAcerDirection(unsigned int dir)
+{
+    switch(dir)
+    {
+        case MODE_DIRECTION_RIGHT:
+            return 1;
+        case MODE_DIRECTION_LEFT:
+            return 2;
+        case MODE_DIRECTION_UP:
+            return 3;
+        case MODE_DIRECTION_DOWN:
+            return 4;
+        case MODE_DIRECTION_HORIZONTAL:
+            return 5; /* Clockwise */
+        case MODE_DIRECTION_VERTICAL:
+            return 6; /* Counterclockwise */
+        default:
+            return 1;
+    }
+}
+
 void RGBController_AcerPredatorHelios::DeviceUpdateLEDs()
 {
     AcerPredatorState state;
@@ -561,7 +596,7 @@ void RGBController_AcerPredatorHelios::DeviceUpdateLEDs()
     state.mode              = (uint8_t)current_mode.value;
     state.speed             = (uint8_t)current_mode.speed;
     state.brightness        = (uint8_t)((current_mode.brightness * 0x32) / 100);
-    state.direction         = (current_mode.direction == MODE_DIRECTION_LEFT) ? 2 : 1;
+    state.direction         = ConvertAcerDirection(current_mode.direction);
     state.color_preset      = (current_mode.color_mode == MODE_COLORS_NONE || current_mode.color_mode == MODE_COLORS_RANDOM) ? 0xE0 : 0x00;
 
     RGBColor mode_col = current_mode.colors.empty() ? ToRGBColor(0, 255, 255) : current_mode.colors[0];
@@ -579,6 +614,7 @@ void RGBController_AcerPredatorHelios::DeviceUpdateLEDs()
         state.magkey_mode       = mag_mode.value;
         state.magkey_speed      = (uint8_t)mag_mode.speed;
         state.magkey_brightness = (uint8_t)((mag_mode.brightness * 0x32) / 100);
+        state.magkey_direction  = ConvertAcerDirection(mag_mode.direction);
 
         RGBColor mag_col = mag_mode.colors.empty() ? ToRGBColor(255, 100, 0) : mag_mode.colors[0];
         state.magkey_red   = RGBGetRValue(mag_col);
@@ -590,6 +626,7 @@ void RGBController_AcerPredatorHelios::DeviceUpdateLEDs()
         state.magkey_mode       = is_direct ? ACER_PREDATOR_MAG_DIRECT : ACER_PREDATOR_MAG_FOLLOW;
         state.magkey_speed      = state.speed;
         state.magkey_brightness = state.brightness;
+        state.magkey_direction  = state.direction;
         state.magkey_red        = state.red;
         state.magkey_green      = state.green;
         state.magkey_blue       = state.blue;

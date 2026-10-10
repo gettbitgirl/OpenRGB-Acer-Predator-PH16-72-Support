@@ -346,7 +346,7 @@ void AcerPredatorHeliosController::SendMagKeyEffect(const AcerPredatorState& sta
     mag_commit[4] = sp_val;
     mag_commit[5] = state.magkey_brightness;
     mag_commit[6] = (mag_opcode == ACER_PREDATOR_MAG_RAINBOW || mag_opcode == ACER_PREDATOR_MAG_NEON) ? 0xE0 : 0x00;
-    mag_commit[7] = state.direction;
+    mag_commit[7] = state.magkey_direction;
     mag_commit[8] = CalculateChecksum(mag_commit, ACER_PREDATOR_FEATURE_SIZE);
     hid_send_feature_report(dev, mag_commit, ACER_PREDATOR_FEATURE_SIZE);
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
