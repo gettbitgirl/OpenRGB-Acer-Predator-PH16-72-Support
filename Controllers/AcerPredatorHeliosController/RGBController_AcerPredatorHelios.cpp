@@ -380,6 +380,7 @@ RGBController_AcerPredatorHelios::RGBController_AcerPredatorHelios(std::shared_p
     add_mode("Neon",          ACER_PREDATOR_MODE_NEON,      true,  false, false, true,  0);
     add_mode("Rain",          ACER_PREDATOR_MODE_RAIN,      true,  false, true,  true,  ToRGBColor(0, 255, 255));
     add_mode("Lightning",     ACER_PREDATOR_MODE_LIGHTNING, true,  false, true,  true,  ToRGBColor(0, 255, 255));
+    add_mode("Phosphor",      ACER_PREDATOR_MODE_PHOSPHOR,  true,  false, true,  true,  ToRGBColor(0, 255, 128));
     add_mode("Stars",         ACER_PREDATOR_MODE_STARS,     true,  false, true,  true,  ToRGBColor(255, 255, 255));
     add_mode("Fireball",      ACER_PREDATOR_MODE_FIREBALL,  true,  true,  true,  true,  ToRGBColor(255, 100, 0));
     add_mode("Snow",          ACER_PREDATOR_MODE_SNOW,      true,  false, true,  true,  ToRGBColor(200, 220, 255));
