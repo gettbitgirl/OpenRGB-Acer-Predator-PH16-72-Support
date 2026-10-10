@@ -295,6 +295,10 @@ def main() -> int:
 
     for name, mode, help_text in (
         ("static", 0x00, "send a static-color frame"),
+        ("breathing", 0x01, "send a breathing effect frame"),
+        ("neon", 0x02, "send a neon effect frame"),
+        ("wave", 0x03, "send a wave effect frame"),
+        ("twinkling", 0x07, "send a twinkling effect frame"),
         ("direct", 0xFF, "send the unimplemented Windows Direct-mode candidate"),
     ):
         command = subparsers.add_parser(name, help=help_text)
