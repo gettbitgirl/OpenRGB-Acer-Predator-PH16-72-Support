@@ -185,6 +185,7 @@ RGBController_AcerPredatorLightbarLinux::RGBController_AcerPredatorLightbarLinux
 
 RGBController_AcerPredatorLightbarLinux::~RGBController_AcerPredatorLightbarLinux()
 {
+    Shutdown();
 }
 
 void RGBController_AcerPredatorLightbarLinux::SetupZones()

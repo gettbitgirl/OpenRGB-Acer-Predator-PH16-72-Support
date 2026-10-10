@@ -18,6 +18,8 @@ OpenRGB Windows 64-bit/
 .moc/
 .obj/
 .pch/
+*.gch/
+*.gch
 .rcc/
 .uic/
 .clangd/
