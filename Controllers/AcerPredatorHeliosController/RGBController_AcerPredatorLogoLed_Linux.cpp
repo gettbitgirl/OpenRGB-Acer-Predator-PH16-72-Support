@@ -47,14 +47,17 @@ RGBController_AcerPredatorLogoLedLinux::RGBController_AcerPredatorLogoLedLinux(c
     mode Breathing;
     Breathing.name           = "Breathing";
     Breathing.value          = 1;
-    Breathing.flags          = MODE_FLAG_HAS_SPEED | MODE_FLAG_HAS_BRIGHTNESS;
+    Breathing.flags          = MODE_FLAG_HAS_SPEED | MODE_FLAG_HAS_BRIGHTNESS | MODE_FLAG_HAS_MODE_SPECIFIC_COLOR;
     Breathing.speed_min      = 1;
     Breathing.speed_max      = 5;
     Breathing.speed          = 3;
     Breathing.brightness_min = 0;
     Breathing.brightness_max = 100;
     Breathing.brightness     = 100;
-    Breathing.color_mode     = MODE_COLORS_NONE;
+    Breathing.colors_min     = 1;
+    Breathing.colors_max     = 1;
+    Breathing.colors.resize(1);
+    Breathing.color_mode     = MODE_COLORS_MODE_SPECIFIC;
     modes.push_back(Breathing);
 
     /* Mode 2: Neon */
@@ -176,9 +179,21 @@ void RGBController_AcerPredatorLogoLedLinux::DeviceUpdateMode()
     if(current.name == "Breathing") effect = "breathing";
     else if(current.name == "Neon") effect = "neon";
 
+    RGBColor color = 0;
+    if(current.color_mode == MODE_COLORS_MODE_SPECIFIC && current.colors.size() > 0)
+    {
+        color = current.colors[0];
+    }
+    else if(colors.size() > 0)
+    {
+        color = colors[0];
+    }
+
     std::ostringstream ss;
-    ss << "000000,"
-       << std::dec << current.brightness << ","
+    ss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << (int)RGBGetRValue(color)
+       << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << (int)RGBGetGValue(color)
+       << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << (int)RGBGetBValue(color)
+       << "," << std::dec << current.brightness << ","
        << current.speed << ","
        << effect;
 
