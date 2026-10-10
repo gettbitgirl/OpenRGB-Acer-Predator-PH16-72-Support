@@ -20,6 +20,7 @@ OpenRGB Windows 64-bit/
 .pch/
 *.gch/
 *.gch
+test_pattern.py
 .rcc/
 .uic/
 .clangd/
